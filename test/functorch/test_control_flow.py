@@ -4229,8 +4229,11 @@ class GraphModule(torch.nn.Module):
             )
 
     @skipIfTorchDynamo("not a dynamo test")
-    @parametrize("layers", [2, 3])
+    @parametrize("layers", [1, 2, 3])
     @torch._dynamo.config.patch(capture_scalar_outputs=True)
+    # donated_buffer defaults to False; force it on so the fix (which
+    # excludes scan-fed saved buffers from donation) is actually exercised.
+    @torch._functorch.config.patch(donated_buffer=True)
     def test_scan_chained_closure_gradient_inductor(self, layers):
         B, T, D, DT = 2, 8, 4, 0.1
 
@@ -4283,8 +4286,7 @@ class GraphModule(torch.nn.Module):
 
         ref = make_grads(None)
         got = make_grads("inductor")
-        for r, g in zip(ref, got):
-            self.assertEqual(r, g)
+        self.assertEqual(ref, got)
 
     @unittest.skipIf(not SM70OrLater, "triton")
     @requires_cuda
