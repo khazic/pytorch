@@ -91,7 +91,6 @@ from .schemas import (
 from .subclass_utils import compute_inner_mutated_inp_indices_from_subclass_meta
 from .utils import (
     contain_metadata_mutation_ops,
-    find_saved_tensors_feeding_hops_lowered_to_while_loop,
     get_default_generator,
     make_boxed_func,
     simple_wraps,
@@ -2077,19 +2076,11 @@ def _categorize_saved_tensors_for_backward(
     inner_meta.num_tensors_saved_with_no_vc_check = num_tensors_saved_with_no_vc_check
 
     if torch._functorch.config.donated_buffer:
-        bw_donated_idxs = collect_bw_donated_buffer_idxs(
+        fw_metadata.bw_donated_idxs = collect_bw_donated_buffer_idxs(
             fw_module,
             bw_module,
             inner_meta,
         )
-        # A saved tensor that feeds a HOP inductor lowers into an in-place-mutating
-        # while_loop becomes a mutated while_loop carry that is still live during backward.
-        # Donating it lets inductor overwrite it and silently corrupts gradients.
-        risky_phs = find_saved_tensors_feeding_hops_lowered_to_while_loop(bw_module)
-        if risky_phs:
-            bw_phs = bw_module.graph.find_nodes(op="placeholder")
-            bw_donated_idxs = [i for i in bw_donated_idxs if bw_phs[i] not in risky_phs]
-        fw_metadata.bw_donated_idxs = bw_donated_idxs
         inner_meta.bw_donated_idxs = fw_metadata.bw_donated_idxs
 
     return num_fw_outs_saved_for_bw, num_symints_saved_for_bw

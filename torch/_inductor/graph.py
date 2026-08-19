@@ -621,7 +621,16 @@ class GraphLowering(torch.fx.Interpreter):
         # track the current placeholder index that we are processing
         self.placeholder_idx = -1
 
-        self.bw_donated_idxs = get_donated_idxs()
+        # bw_donated_idxs index the top-level backward graph's placeholders. They
+        # are meaningless for a subgraph (e.g. a control-flow HOP body/cond) whose
+        # placeholders are a different set, and a HOP subgraph's inputs are never
+        # donatable anyway: control-flow HOPs are lowered to a while_loop that
+        # mutates its carried inputs in place across iterations, so donating (and
+        # reusing) such a carry corrupts it. Only the top-level graph gets them.
+        # See https://github.com/pytorch/pytorch/issues/153679.
+        self.bw_donated_idxs = (
+            None if getattr(self, "parent", None) is not None else get_donated_idxs()
+        )
 
         # Cache for dep size hints to avoid expensive recomputation
         self.dep_size_hint_cache: dict[tuple[Dep, bool], int] = {}
